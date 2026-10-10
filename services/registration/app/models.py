@@ -128,3 +128,17 @@ class WalkInCreate(BaseModel):
     event_id: str
     ticket_count: int = Field(..., ge=1, le=500)
     notes: Optional[str] = None
+
+
+# ── internal (user-service leave-society flow) ────────────────────────────────
+
+class RegistrationActivityInternal(BaseModel):
+    event_id: str
+    status: str
+    ticket_count: int
+    total_amount: Optional[Decimal] = None
+    registered_at: datetime
+
+
+class MemberEraseOut(BaseModel):
+    deleted_ids: list[str]

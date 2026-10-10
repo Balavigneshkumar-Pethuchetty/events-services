@@ -123,3 +123,17 @@ async def post_notification(
             headers=_headers(),
         )
     resp.raise_for_status()
+
+
+async def clear_notifications(types: Iterable[str], related_ids: Iterable[Optional[str]]) -> None:
+    """Delete resolved action-item notifications (type ∈ types, related_id ∈ related_ids)."""
+    ids = [i for i in related_ids if i]
+    if not ids:
+        return
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"{_base()}/notifications/clear",
+            json={"types": list(types), "related_ids": ids},
+            headers=_headers(),
+        )
+    resp.raise_for_status()

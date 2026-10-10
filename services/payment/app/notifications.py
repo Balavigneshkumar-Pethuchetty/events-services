@@ -27,7 +27,7 @@ from app.config import settings
 from app.email import send_notification_emails_sequential
 from app.event_client import get_event, get_managers
 from app.splunk_logger import log_app_error
-from shared.user_client import get_by_id, get_by_ids, get_by_sub, post_notification
+from shared.user_client import clear_notifications, get_by_id, get_by_ids, get_by_sub, post_notification
 
 
 def _mask_phone(phone: str) -> str:
@@ -77,23 +77,15 @@ async def notify_refund_processed(
         f"Your refund of {row['currency']} {float(row['amount']):.2f} for "
         f"\"{event['title']}\" has been processed by {actor_name}. Details: {link}"
     )
-    await conn.execute(
-        "INSERT INTO core.notification (user_id, event_id, type, title, message, related_id) "
-        "VALUES ($1::uuid, $2::uuid, 'refund_processed', 'Refund processed', $3, $4::uuid)",
-        row["user_id"], row["event_id"], message, row["txn_id"],
+    await post_notification(
+        row["user_id"], "refund_processed", "Refund processed", message,
+        related_id=row["txn_id"], event_id=row["event_id"],
     )
     # The refund task queue item — and, if this refund was triggered by a ticket
     # cancellation, the paired "Registration cancelled" FYI — are both fully
     # resolved now, so clear them out of the admin/organizer notification popup.
-    await conn.execute(
-        "DELETE FROM core.notification WHERE type = 'refund_requested' AND related_id = $1::uuid",
-        row["txn_id"],
-    )
-    if row["registration_id"]:
-        await conn.execute(
-            "DELETE FROM core.notification WHERE type = 'cancellation_requested' AND related_id = $1::uuid",
-            row["registration_id"],
-        )
+    await clear_notifications(["refund_requested"], [row["txn_id"]])
+    await clear_notifications(["cancellation_requested"], [row["registration_id"]])
     return [{
         "phone": recipient.get("phone"), "email": recipient.get("email"), "title": "Refund processed",
         "notify_sms": recipient.get("notify_sms", True), "notify_email": recipient.get("notify_email", True),
@@ -143,17 +135,12 @@ async def notify_payment_verdict(
     if remark:
         message += f"\n\nReviewer's comment: {remark}"
 
-    await conn.execute(
-        "INSERT INTO core.notification (user_id, event_id, type, title, message, related_id) "
-        "VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)",
-        row["user_id"], row["event_id"], type_, title, message, row["txn_id"],
+    await post_notification(
+        row["user_id"], type_, title, message, related_id=row["txn_id"], event_id=row["event_id"],
     )
     # Verified or rejected — the reviewer's action item is resolved either way,
     # so clear the "Payment verification requested" card from their popup.
-    await conn.execute(
-        "DELETE FROM core.notification WHERE type = 'payment_verification_requested' AND related_id = $1::uuid",
-        row["txn_id"],
-    )
+    await clear_notifications(["payment_verification_requested"], [row["txn_id"]])
     return [{
         "phone": recipient.get("phone"), "email": recipient.get("email"), "title": title,
         "notify_sms": recipient.get("notify_sms", True), "notify_email": recipient.get("notify_email", True),

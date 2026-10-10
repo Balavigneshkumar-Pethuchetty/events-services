@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 
 from app.config import settings
 from app.database import wait_for_db, close_pool, get_pool
-from app.routes import cart, complimentary, registrations
+from app.routes import cart, complimentary, internal, registrations
 from app.middleware.splunk import SplunkLoggingMiddleware
 from shared.swagger_theme import themed_swagger_ui_html
 
@@ -79,6 +79,7 @@ app.add_middleware(SplunkLoggingMiddleware)
 app.include_router(cart.router,          prefix="/registrations", tags=["cart"])
 app.include_router(registrations.router, prefix="/registrations", tags=["registrations"])
 app.include_router(complimentary.router, prefix="/complimentary", tags=["complimentary"])
+app.include_router(internal.router,      prefix="/internal/registrations", tags=["internal"])
 
 
 @app.get("/payment-config", tags=["ops"],

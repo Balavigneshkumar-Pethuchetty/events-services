@@ -381,3 +381,23 @@ class FundShareLinkOut(BaseModel):
     token: str
     path: str
     expires_at: datetime
+
+
+# ── internal (user-service leave-society flow) ────────────────────────────────
+
+class MemberBlockersInternal(BaseModel):
+    pending_payment_event_ids: list[str]
+    collector_event_ids: list[str]
+    open_sponsorship_refund_count: int
+
+
+class PaymentActivityInternal(BaseModel):
+    event_id: str
+    amount: Decimal
+    currency: str
+    status: str
+    created_at: datetime
+
+
+class MemberEraseOut(BaseModel):
+    deleted_ids: list[str]

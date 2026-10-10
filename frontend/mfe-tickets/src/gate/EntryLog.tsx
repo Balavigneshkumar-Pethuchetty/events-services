@@ -31,7 +31,6 @@ import PendingIcon from '@mui/icons-material/Pending';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
-import { useAuth } from '../contexts/AuthContext';
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -434,8 +433,8 @@ function RosterPanel({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function EntryLog() {
-  const { token } = useAuth();
+// Exposed to the shell as mfe_tickets/EntryLog (EVENTS_SERVICE_PLAN.md C5).
+export function EntryLog({ token = null }: { token?: string | null }) {
 
   const [allEvents,     setAllEvents]     = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);

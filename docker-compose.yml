@@ -1,0 +1,295 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# events-service — event, registration, ticket and payment services plus their
+# micro-frontends, split out of ~/my-society (see docs/CONTRACT.md and
+# ~/my-society/EVENTS_SERVICE_PLAN.md).
+#
+# NOT a self-contained stack: it joins my-society's existing Docker network and
+# uses its postgres (via pgbouncer), redis, minio, nginx and user-service. Start
+# my-society first (`make up` there), then `make up` here — the Makefile checks.
+#
+# The compose SERVICE NAMES below are the DNS aliases my-society's nginx and
+# user-service call (event-service:3002, mfe-events:80, …). Don't rename them.
+# The project name differs from my-society's so neither stack ever treats the
+# other's containers as orphans.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: ${EVENTS_PROJECT_NAME:-society-events}
+
+services:
+  # ─── Event Service (port 3002) — /api/events/ ──────────────────────────────
+  event-service:
+    build:
+      context: .
+      dockerfile: services/event/Dockerfile
+    restart: always
+    environment:
+      DB_HOST:           pgbouncer
+      DB_PORT:           6432
+      DB_NAME:           ${POSTGRES_DB:-society_events}
+      # Own DB role (event_role), not the shared POSTGRES_USER — see
+      # DB_ISOLATION_PLAN.md / db/migrations/033_event_service_schema_isolation.sql.
+      # Works transparently through pgbouncer: the [databases] entry's
+      # auth_user=${POSTGRES_USER} plus PgBouncer's default auth_query lets any
+      # Postgres role authenticate without a userlist.txt/pgbouncer config change,
+      # as long as POSTGRES_USER can read pg_shadow (true for the default superuser).
+      DB_USER:           ${EVENT_DB_USER}
+      DB_PASSWORD:       ${EVENT_DB_PASSWORD}
+      KEYCLOAK_URL:              ${KEYCLOAK_URL:-https://auth.gm-global-techies-town.club}
+      KEYCLOAK_REALM:            society-events
+      KEYCLOAK_PUBLIC_URL:       ${KEYCLOAK_PUBLIC_URL}
+      INTERNAL_API_KEY:          ${INTERNAL_API_KEY}
+      SOCIETY_ID:                11100000-0000-0000-0000-000000000001
+      APP_PUBLIC_URL:            ${APP_PUBLIC_URL}
+      SPLUNK_HEC_URL:            http://host.containers.internal:8088/services/collector/event
+      SPLUNK_HEC_TOKEN:          ${SPLUNK_HEC_TOKEN:-}
+      SOCIETY_UPI_ID:            ${SOCIETY_UPI_ID:-}
+      SOCIETY_UPI_NAME:          ${SOCIETY_UPI_NAME:-}
+      SOCIETY_BANK_NAME:         ${SOCIETY_BANK_NAME:-}
+      SOCIETY_BANK_ACCOUNT:      ${SOCIETY_BANK_ACCOUNT:-}
+      SOCIETY_BANK_IFSC:         ${SOCIETY_BANK_IFSC:-}
+      SOCIETY_BANK_BENEFICIARY:  ${SOCIETY_BANK_BENEFICIARY:-}
+      AUTH_SERVICE_URL:          ${AUTH_SERVICE_URL:-http://host.containers.internal:8000}
+      AUTH_SERVICE_API_KEY:      ${AUTH_SERVICE_API_KEY:-}
+      GMAIL_SMTP_USER:           ${GMAIL_SMTP_USER:-}
+      GMAIL_APP_PASSWORD:        ${GMAIL_APP_PASSWORD:-}
+      REDIS_HOST:                redis
+      REDIS_PORT:                ${REDIS_PORT:-6379}
+      REDIS_PASSWORD:            ${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - society_net
+
+  # ─── Registration Service (port 3005) — /api/registrations/ ────────────────
+  registration-service:
+    build:
+      context: .
+      dockerfile: services/registration/Dockerfile
+    restart: always
+    environment:
+      DB_HOST:           pgbouncer
+      DB_PORT:           6432
+      DB_NAME:           ${POSTGRES_DB:-society_events}
+      # Own DB role (registration_role), not the shared POSTGRES_USER — see
+      # DB_ISOLATION_PLAN.md / db/migrations/037_registration_service_schema_isolation.sql.
+      DB_USER:           ${REGISTRATION_DB_USER}
+      DB_PASSWORD:       ${REGISTRATION_DB_PASSWORD}
+      KEYCLOAK_URL:              ${KEYCLOAK_URL:-https://auth.gm-global-techies-town.club}
+      KEYCLOAK_REALM:            society-events
+      KEYCLOAK_PUBLIC_URL:       ${KEYCLOAK_PUBLIC_URL}
+      APP_PUBLIC_URL:            ${APP_PUBLIC_URL}
+      INTERNAL_API_KEY:          ${INTERNAL_API_KEY}
+      SOCIETY_ID:                11100000-0000-0000-0000-000000000001
+      SPLUNK_HEC_URL:            http://host.containers.internal:8088/services/collector/event
+      SPLUNK_HEC_TOKEN:          ${SPLUNK_HEC_TOKEN:-}
+      AUTH_SERVICE_URL:          ${AUTH_SERVICE_URL:-http://host.containers.internal:8000}
+      AUTH_SERVICE_API_KEY:      ${AUTH_SERVICE_API_KEY:-}
+      SOCIETY_UPI_ID:            ${SOCIETY_UPI_ID:-}
+      SOCIETY_UPI_NAME:          ${SOCIETY_UPI_NAME:-}
+      SOCIETY_BANK_NAME:         ${SOCIETY_BANK_NAME:-}
+      SOCIETY_BANK_ACCOUNT:      ${SOCIETY_BANK_ACCOUNT:-}
+      SOCIETY_BANK_IFSC:         ${SOCIETY_BANK_IFSC:-}
+      SOCIETY_BANK_BENEFICIARY:  ${SOCIETY_BANK_BENEFICIARY:-}
+      GMAIL_SMTP_USER:           ${GMAIL_SMTP_USER:-}
+      GMAIL_APP_PASSWORD:        ${GMAIL_APP_PASSWORD:-}
+      MINIO_ENDPOINT:            http://minio:9000
+      MINIO_ACCESS_KEY:          ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY:          ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET:              uploads
+    volumes:
+      - registration_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - society_net
+
+  # ─── Ticket Service (port 3006) — /api/tickets/ ────────────────────────────
+  ticket-service:
+    build:
+      context: .
+      dockerfile: services/ticket/Dockerfile
+    restart: always
+    environment:
+      DB_HOST:           pgbouncer
+      DB_PORT:           6432
+      DB_NAME:           ${POSTGRES_DB:-society_events}
+      # Own DB role (ticket_role), not the shared POSTGRES_USER — see
+      # DB_ISOLATION_PLAN.md / db/migrations/034_ticket_service_schema_isolation.sql.
+      DB_USER:           ${TICKET_DB_USER}
+      DB_PASSWORD:       ${TICKET_DB_PASSWORD}
+      KEYCLOAK_URL:              ${KEYCLOAK_URL:-https://auth.gm-global-techies-town.club}
+      KEYCLOAK_REALM:            society-events
+      KEYCLOAK_PUBLIC_URL:       ${KEYCLOAK_PUBLIC_URL}
+      INTERNAL_API_KEY:          ${INTERNAL_API_KEY}
+      SOCIETY_ID:                11100000-0000-0000-0000-000000000001
+      SPLUNK_HEC_URL:            http://host.containers.internal:8088/services/collector/event
+      SPLUNK_HEC_TOKEN:          ${SPLUNK_HEC_TOKEN:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3006/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - society_net
+
+  # ─── Payment Service (port 3007) — /api/payments/ ──────────────────────────
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment/Dockerfile
+    restart: always
+    environment:
+      DB_HOST:           pgbouncer
+      DB_PORT:           6432
+      DB_NAME:           ${POSTGRES_DB:-society_events}
+      # Own DB role (payment_role), not the shared POSTGRES_USER — see
+      # DB_ISOLATION_PLAN.md / db/migrations/036_payment_service_schema_isolation.sql.
+      DB_USER:           ${PAYMENT_DB_USER}
+      DB_PASSWORD:       ${PAYMENT_DB_PASSWORD}
+      KEYCLOAK_URL:              ${KEYCLOAK_URL:-https://auth.gm-global-techies-town.club}
+      KEYCLOAK_REALM:            society-events
+      KEYCLOAK_PUBLIC_URL:       ${KEYCLOAK_PUBLIC_URL}
+      APP_PUBLIC_URL:            ${APP_PUBLIC_URL}
+      INTERNAL_API_KEY:          ${INTERNAL_API_KEY}
+      SOCIETY_ID:                11100000-0000-0000-0000-000000000001
+      PAYMENT_PROVIDER:          ${PAYMENT_PROVIDER:-MANUAL_UPI}
+      PAYMENT_SECRET_KEY:        ${PAYMENT_SECRET_KEY}
+      SPLUNK_HEC_URL:            http://host.containers.internal:8088/services/collector/event
+      SPLUNK_HEC_TOKEN:          ${SPLUNK_HEC_TOKEN:-}
+      AUTH_SERVICE_URL:          ${AUTH_SERVICE_URL:-http://host.containers.internal:8000}
+      AUTH_SERVICE_API_KEY:      ${AUTH_SERVICE_API_KEY:-}
+      RECONCILIATION_SERVICE_BASE_URL:   ${RECONCILIATION_SERVICE_BASE_URL:-http://host.containers.internal:8001}
+      RECONCILIATION_SERVICE_SECRET_KEY: ${PAYMENT_RECONCILIATION_SECRET_KEY}
+      RECONCILIATION_SERVICE_AUDIENCE:   payment-service
+      # Claude API — alternative to Ollama for the IMAP email parser; selected via
+      # ai_provider in payment_reconciliation_settings (PUT /settings), not here.
+      ANTHROPIC_API_KEY:         ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL:              ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      PAYMENT_SERVICE_ENV:       ${PAYMENT_SERVICE_ENV:-production}
+      GMAIL_SMTP_USER:           ${GMAIL_SMTP_USER:-}
+      GMAIL_APP_PASSWORD:        ${GMAIL_APP_PASSWORD:-}
+      MINIO_ENDPOINT:            http://minio:9000
+      MINIO_ACCESS_KEY:          ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY:          ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET:              uploads
+    volumes:
+      - payment_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3007/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - society_net
+
+  # ─── MFE: Events (4001) — /mfe-events/ ─────────────────────────────────────
+  mfe-events:
+    build:
+      context: ./frontend/mfe-events
+      dockerfile: Dockerfile
+      args:
+        VITE_MODE: ${VITE_MODE:-production}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - society_net
+
+  # ─── MFE: Booking (4002) — /mfe-booking/ ───────────────────────────────────
+  mfe-booking:
+    build:
+      context: ./frontend/mfe-booking
+      dockerfile: Dockerfile
+      args:
+        VITE_MODE: ${VITE_MODE:-production}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - society_net
+
+  # ─── MFE: Payment (4003) — /mfe-payment/ ───────────────────────────────────
+  mfe-payment:
+    build:
+      context: ./frontend/mfe-payment
+      dockerfile: Dockerfile
+      args:
+        VITE_MODE: ${VITE_MODE:-production}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - society_net
+
+  # ─── MFE: Tickets + gate pages (4005) — /mfe-tickets/ ──────────────────────
+  mfe-tickets:
+    build:
+      context: ./frontend/mfe-tickets
+      dockerfile: Dockerfile
+      args:
+        VITE_MODE: ${VITE_MODE:-production}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - society_net
+
+  # ─── MFE: Event Admin (4007) — /mfe-event-admin/ ───────────────────────────
+  mfe-event-admin:
+    build:
+      context: ./frontend/mfe-event-admin
+      dockerfile: Dockerfile
+      args:
+        VITE_MODE: ${VITE_MODE:-production}
+    restart: always
+    # No host port — served by nginx at /mfe-event-admin/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - society_net
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+# Created and owned by my-society's compose project; reused here as-is.
+volumes:
+  registration_uploads:
+    name: ${SOCIETY_PROJECT:-society}_registration_uploads
+    external: true
+  payment_uploads:
+    name: ${SOCIETY_PROJECT:-society}_payment_uploads
+    external: true
+
+# ─── Network ─────────────────────────────────────────────────────────────────
+networks:
+  society_net:
+    name: ${SOCIETY_PROJECT:-society}_network
+    external: true

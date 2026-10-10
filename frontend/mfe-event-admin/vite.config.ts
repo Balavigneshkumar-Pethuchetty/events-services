@@ -1,0 +1,62 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import federation from '@originjs/vite-plugin-federation';
+
+export default defineConfig(({ command, mode }) => ({
+  base: command === 'serve' ? '/' : '/mfe-event-admin/',
+  plugins: [
+    react(),
+    federation({
+      name: 'mfe_event_admin',
+      filename: 'remoteEntry.js',
+      exposes: {
+        './ManageRoutes':     './src/ManageRoutes',
+        './EventAdminRoutes': './src/EventAdminRoutes',
+        './SponsorApp':       './src/SponsorApp',
+      },
+      // Cast to any to satisfy type differences between plugin SharedConfig and our desired options
+      shared: {
+        'react':           { singleton: true, requiredVersion: '^18.3.1' },
+        'react-dom':       { singleton: true, requiredVersion: '^18.3.1' },
+        'react-router-dom':{ singleton: true, requiredVersion: '^6.24.1' },
+        '@mui/material':   { singleton: true, requiredVersion: '^5.16.7' },
+        '@emotion/react':  { singleton: true, requiredVersion: '^11.13.0' },
+        '@emotion/styled': { singleton: true, requiredVersion: '^11.13.0' },
+        i18next:           { singleton: true, requiredVersion: '^26.3.6' },
+        'react-i18next':   { singleton: true, requiredVersion: '^17.0.11' },
+      } as any,
+    }),
+  ],
+  server: {
+    port: 4007,
+    cors: true,
+    proxy: {
+      '/realms':     { target: 'http://localhost:8080' },
+      '/resources':  { target: 'http://localhost:8080' },
+      '/api/users':  { target: 'http://localhost:8080' },
+      '/api/events': { target: 'http://localhost:8080' },
+      '/api/registrations': { target: 'http://localhost:8080' },
+      '/api/tickets':       { target: 'http://localhost:8080' },
+      '/api/payments':      { target: 'http://localhost:8080' },
+    },
+  },
+  preview: {
+    port: 4007,
+    cors: true,
+    proxy: {
+      '/realms':     { target: 'http://localhost:8080' },
+      '/resources':  { target: 'http://localhost:8080' },
+      '/api/users':  { target: 'http://localhost:8080' },
+      '/api/events': { target: 'http://localhost:8080' },
+      '/api/registrations': { target: 'http://localhost:8080' },
+      '/api/tickets':       { target: 'http://localhost:8080' },
+      '/api/payments':      { target: 'http://localhost:8080' },
+    },
+  },
+  build: {
+    target: 'esnext',
+    modulePreload: false,
+    minify: mode === 'production',
+    cssCodeSplit: false,
+  },
+}));

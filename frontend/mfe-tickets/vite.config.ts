@@ -10,7 +10,10 @@ export default defineConfig(({ command, mode }) => ({
       name: 'mfe_tickets',
       filename: 'remoteEntry.js',
       exposes: {
-        './TicketsApp': './src/TicketsApp',
+        './TicketsApp':  './src/TicketsApp',
+        // Gate pages (security guard), moved out of the shell — EVENTS_SERVICE_PLAN.md C5
+        './GateScanner': './src/GateScanner',
+        './EntryLog':    './src/EntryLog',
       },
       shared: {
         react:              { singleton: true, requiredVersion: '^18.3.1' },

@@ -11,6 +11,6 @@ RUN apt-get update \
 COPY --from=builder /deps /usr/local
 WORKDIR /app
 COPY services/event/app/ app/
-COPY services/shared/ shared/
+COPY shared/ shared/
 EXPOSE 3002
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3002"]

@@ -27,8 +27,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { Html5Qrcode } from 'html5-qrcode';
-import { useAuth } from '../contexts/AuthContext';
-import { logError } from '../utils/splunk';
+import { logError, setLogToken } from '../utils/splunk';
 
 // ── API base URLs ─────────────────────────────────────────────────────────────
 
@@ -610,8 +609,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function SecurityScanner() {
-  const { token } = useAuth();
+// Exposed to the shell as mfe_tickets/GateScanner (EVENTS_SERVICE_PLAN.md C5) —
+// the shell passes its Keycloak token in, same as TicketsApp.
+export function SecurityScanner({ token = null }: { token?: string | null }) {
+  setLogToken(token);
   const [tab, setTab] = useState(0);
 
   if (!token) {

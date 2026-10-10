@@ -11,7 +11,7 @@ RUN apt-get update \
 COPY --from=builder /deps /usr/local
 WORKDIR /app
 COPY services/payment/app/ app/
-COPY services/shared/ shared/
+COPY shared/ shared/
 COPY services/payment/test_screenshot/ test_screenshot/
 RUN mkdir -p /app/uploads/payment-screenshots
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3007"]

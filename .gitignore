@@ -1,0 +1,39 @@
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.dev
+.env.test
+.env.stage
+*.pem
+*.key
+cloudflared/*.json
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.venv-test/
+
+# ── Editor / tool state ───────────────────────────────────────────────────────
+.claude/
+.vscode/
+.idea/
+*.local
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Docker volumes / build cache (never tracked) ──────────────────────────────
+*.tar
+
+# ── Backups (may contain secrets) ─────────────────────────────────────────────
+*.bak
+*.bak-*
+.env.bak*
